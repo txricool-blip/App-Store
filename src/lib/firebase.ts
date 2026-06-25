@@ -54,6 +54,55 @@ export function isUserAdmin(user: User | null): boolean {
   return user !== null && user.email === ADMIN_EMAIL;
 }
 
+// 3. Error handling specification as per firebase-integration skill
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  };
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData?.map(provider => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  };
+  const stringifiedError = JSON.stringify(errInfo);
+  console.error('Firestore Error: ', stringifiedError);
+  throw new Error(stringifiedError);
+}
+
 // MANDATORY: Validate Connection to Firestore on boot
 async function testConnection() {
   try {
@@ -95,8 +144,9 @@ export async function uploadMediaFile(
 
 // Firestore CRUD operations for Apps
 export async function fetchApps(): Promise<AppItem[]> {
+  const path = "apps";
   try {
-    const q = query(collection(db, "apps"), orderBy("createdAt", "desc"));
+    const q = query(collection(db, path), orderBy("createdAt", "desc"));
     const snapshot = await getDocs(q);
     const appsList: AppItem[] = [];
     snapshot.forEach((d) => {
@@ -104,51 +154,75 @@ export async function fetchApps(): Promise<AppItem[]> {
     });
     return appsList;
   } catch (error) {
-    console.error("Error fetching apps:", error);
-    return [];
+    return handleFirestoreError(error, OperationType.GET, path);
   }
 }
 
 export async function saveApp(appItem: AppItem): Promise<void> {
-  const docRef = doc(db, "apps", appItem.id);
-  await setDoc(docRef, appItem);
+  const path = `apps/${appItem.id}`;
+  try {
+    const docRef = doc(db, "apps", appItem.id);
+    await setDoc(docRef, appItem);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
 }
 
 export async function deleteApp(id: string): Promise<void> {
-  const docRef = doc(db, "apps", id);
-  await deleteDoc(docRef);
+  const path = `apps/${id}`;
+  try {
+    const docRef = doc(db, "apps", id);
+    await deleteDoc(docRef);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
 }
 
 export async function incrementDownload(id: string): Promise<void> {
-  const docRef = doc(db, "apps", id);
-  await updateDoc(docRef, {
-    downloads: increment(1)
-  });
+  const path = `apps/${id}`;
+  try {
+    const docRef = doc(db, "apps", id);
+    await updateDoc(docRef, {
+      downloads: increment(1)
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
 }
 
 // Firestore CRUD operations for Categories
 export async function fetchCategories(): Promise<Category[]> {
+  const path = "categories";
   try {
-    const snapshot = await getDocs(collection(db, "categories"));
+    const snapshot = await getDocs(collection(db, path));
     const catList: Category[] = [];
     snapshot.forEach((d) => {
       catList.push(d.data() as Category);
     });
     return catList;
   } catch (error) {
-    console.error("Error fetching categories:", error);
-    return [];
+    return handleFirestoreError(error, OperationType.GET, path);
   }
 }
 
 export async function saveCategory(category: Category): Promise<void> {
-  const docRef = doc(db, "categories", category.id);
-  await setDoc(docRef, category);
+  const path = `categories/${category.id}`;
+  try {
+    const docRef = doc(db, "categories", category.id);
+    await setDoc(docRef, category);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
 }
 
 export async function deleteCategory(id: string): Promise<void> {
-  const docRef = doc(db, "categories", id);
-  await deleteDoc(docRef);
+  const path = `categories/${id}`;
+  try {
+    const docRef = doc(db, "categories", id);
+    await deleteDoc(docRef);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
 }
 
 // Authentication Handlers
@@ -169,7 +243,14 @@ export async function logoutUser(): Promise<void> {
 // SEED DATA: Seed initial categories and beautiful apps if they do not exist
 export async function seedInitialStoreIfEmpty() {
   try {
-    const categoriesSnapshot = await getDocs(collection(db, "categories"));
+    let categoriesSnapshot;
+    try {
+      categoriesSnapshot = await getDocs(collection(db, "categories"));
+    } catch (error) {
+      // If we fail here, let handleFirestoreError process it
+      return handleFirestoreError(error, OperationType.GET, "categories");
+    }
+
     if (categoriesSnapshot.empty) {
       const defaultCategories: Category[] = [
         { id: "games", name: "Games", icon: "Gamepad" },
@@ -186,90 +267,21 @@ export async function seedInitialStoreIfEmpty() {
       console.log("Seeded default app categories.");
     }
 
-    const appsSnapshot = await getDocs(collection(db, "apps"));
-    if (appsSnapshot.empty) {
-      const initialApps: AppItem[] = [
-        {
-          id: "cyber-task-manager",
-          name: "Cyber Task Manager",
-          shortDescription: "A high-productivity task manager with kanban boards, reminders, and dark-theme focus dashboards.",
-          fullDescription: "Stay super organized with Cyber Task Manager. Designed for professionals and power users, this productivity beast features lightning-fast task entry, custom tag groupings, interactive kanban boards, habit tracking statistics, and full cloud syncing. Keep your goals close, organize project hierarchies, and power through your days with our minimalist, eye-safe design.\n\nKey Features:\n- Interactive custom Kanban Boards\n- Pomodoro Session Timer integrated with log tracking\n- Smart calendar sync\n- Advanced tag categorization\n- Eye-strain reducing midnight styling",
-          category: "productivity",
-          version: "2.4.1",
-          fileSize: "14.2 MB",
-          androidVersion: "Android 8.0+",
-          developerName: "PixelForge Studios",
-          developerEmail: "support@pixelforgestudios.com",
-          websiteUrl: "https://pixelforge.dev",
-          iconUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=150&h=150&q=80",
-          bannerUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&h=400&q=80",
-          screenshots: [
-            "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=400&h=700&q=80",
-            "https://images.unsplash.com/photo-1626379953822-baec19c3bbcd?auto=format&fit=crop&w=400&h=700&q=80"
-          ],
-          apkUrl: "#",
-          downloads: 4820,
-          featured: true,
-          changelog: "- Added offline local syncing\n- Fixed notifications badge counting bugs\n- Implemented Pomodoro focus sessions",
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        },
-        {
-          id: "space-odyssey-runner",
-          name: "Space Odyssey Runner",
-          shortDescription: "Endless hyper-casual arcade runner through asteroids, wormholes, and alien defenses.",
-          fullDescription: "Blast off into deep space in this adrenaline-fueled arcade runner! Evade dense asteroid belts, navigate unpredictable wormholes, collect hyper-fuel elements, and unlock sleek spaceships as you set high scores against the cosmos. Featuring stellar synthwave beats, responsive one-touch glide controls, and mesmerizing custom visual aesthetics.",
-          category: "games",
-          version: "1.0.8",
-          fileSize: "45.1 MB",
-          androidVersion: "Android 9.0+",
-          developerName: "Astrea Interactive",
-          developerEmail: "games@astrea.io",
-          websiteUrl: "https://astrea.io",
-          iconUrl: "https://images.unsplash.com/photo-1614741118887-7a4ee193a5fa?auto=format&fit=crop&w=150&h=150&q=80",
-          bannerUrl: "https://images.unsplash.com/photo-1614741118887-7a4ee193a5fa?auto=format&fit=crop&w=800&h=400&q=80",
-          screenshots: [
-            "https://images.unsplash.com/photo-1614741118887-7a4ee193a5fa?auto=format&fit=crop&w=400&h=700&q=80",
-            "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?auto=format&fit=crop&w=400&h=700&q=80"
-          ],
-          apkUrl: "#",
-          downloads: 12530,
-          featured: true,
-          changelog: "- Added 3 new custom spaceships\n- New electronic soundtrack release\n- Refactored rendering for smoother frame-rates",
-          createdAt: new Date(Date.now() - 86400000).toISOString(),
-          updatedAt: new Date(Date.now() - 86400000).toISOString()
-        },
-        {
-          id: "secure-chat-messenger",
-          name: "Secure Chat Messenger",
-          shortDescription: "Ultra-private communication with end-to-end encryption, self-destructing messages, and dark mode.",
-          fullDescription: "Communicate with absolute peace of mind. Secure Chat Messenger utilizes cutting-edge cryptographic protocols to deliver peer-to-peer messaging that cannot be intercepted. No server logs, no telemetry, and zero trackers. Send text, high-res photos, voice files, and documents that can automatically self-destruct upon reading.",
-          category: "communication",
-          version: "3.0.2",
-          fileSize: "28.5 MB",
-          androidVersion: "Android 7.0+",
-          developerName: "CipherLabs Security",
-          developerEmail: "privacy@cipherlabs.com",
-          iconUrl: "https://images.unsplash.com/photo-1577563908411-5077b6dc7624?auto=format&fit=crop&w=150&h=150&q=80",
-          bannerUrl: "https://images.unsplash.com/photo-1577563908411-5077b6dc7624?auto=format&fit=crop&w=800&h=400&q=80",
-          screenshots: [
-            "https://images.unsplash.com/photo-1577563908411-5077b6dc7624?auto=format&fit=crop&w=400&h=700&q=80"
-          ],
-          apkUrl: "#",
-          downloads: 7420,
-          featured: false,
-          changelog: "- Enhanced key exchange protocol with quantum resistance\n- Speed optimization for low-bandwidth networks",
-          createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-          updatedAt: new Date(Date.now() - 86400000 * 3).toISOString()
-        }
-      ];
-
-      for (const app of initialApps) {
-        await saveApp(app);
+    // Clean up existing demo/simulator apps to ensure a completely pristine state
+    const demoAppIds = ["cyber-task-manager", "space-odyssey-runner", "secure-chat-messenger"];
+    for (const id of demoAppIds) {
+      const docRef = doc(db, "apps", id);
+      try {
+        await deleteDoc(docRef);
+        console.log(`Removed demo app: ${id}`);
+      } catch (e) {
+        console.warn(`Could not remove demo app ${id} on launch:`, e);
       }
-      console.log("Seeded default app listings.");
     }
   } catch (error) {
-    console.error("Seeding operation skipped or encountered warning:", error);
+    console.error("Seeding/Cleanup operation warning:", error);
+    if (error instanceof Error && (error.message.includes("permission") || error.message.includes("Permission"))) {
+      handleFirestoreError(error, OperationType.WRITE, "seeding");
+    }
   }
 }
