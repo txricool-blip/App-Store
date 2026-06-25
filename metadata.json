@@ -1,0 +1,6 @@
+{
+  "name": "Android App Store",
+  "description": "A professional storefront to discover, download, publish, and manage Android application packages (APKs).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

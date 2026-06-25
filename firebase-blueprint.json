@@ -1,0 +1,138 @@
+{
+  "entities": {
+    "app": {
+      "title": "Android App",
+      "description": "Information about a published Android application",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The unique identifier of the app"
+        },
+        "name": {
+          "type": "string",
+          "description": "The human-readable name of the app"
+        },
+        "shortDescription": {
+          "type": "string",
+          "description": "A brief overview of what the app does"
+        },
+        "fullDescription": {
+          "type": "string",
+          "description": "Comprehensive description with features"
+        },
+        "category": {
+          "type": "string",
+          "description": "The catalog classification category for the app"
+        },
+        "version": {
+          "type": "string",
+          "description": "The current published version of the app"
+        },
+        "fileSize": {
+          "type": "string",
+          "description": "Size of the APK file"
+        },
+        "androidVersion": {
+          "type": "string",
+          "description": "Minimum required Android operating system version"
+        },
+        "developerName": {
+          "type": "string",
+          "description": "Name of the developer or publisher"
+        },
+        "developerEmail": {
+          "type": "string",
+          "description": "Support email address for the app"
+        },
+        "websiteUrl": {
+          "type": "string",
+          "description": "Official website URL of the developer"
+        },
+        "iconUrl": {
+          "type": "string",
+          "description": "URL to the application's logo icon"
+        },
+        "bannerUrl": {
+          "type": "string",
+          "description": "URL to the application's promotional landscape banner"
+        },
+        "screenshots": {
+          "type": "array",
+          "description": "Array of URLs pointing to application screenshots"
+        },
+        "apkUrl": {
+          "type": "string",
+          "description": "Direct download link to the published APK file"
+        },
+        "downloads": {
+          "type": "number",
+          "description": "Total number of completed downloads"
+        },
+        "featured": {
+          "type": "boolean",
+          "description": "Whether the app should be highlighted on the storefront"
+        },
+        "changelog": {
+          "type": "string",
+          "description": "Log detailing recent changes, bug fixes, or new features"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp representing creation date"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp representing the last update date"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "shortDescription",
+        "category",
+        "version",
+        "fileSize",
+        "androidVersion",
+        "developerName",
+        "developerEmail",
+        "iconUrl",
+        "apkUrl",
+        "downloads",
+        "featured",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "category": {
+      "title": "App Category",
+      "description": "The classification category for Android apps",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique slug ID for the category"
+        },
+        "name": {
+          "type": "string",
+          "description": "User-facing display name for the category"
+        },
+        "icon": {
+          "type": "string",
+          "description": "Lucide icon string name used to render the category icon"
+        }
+      },
+      "required": ["id", "name", "icon"]
+    }
+  },
+  "firestore": {
+    "/apps/{appId}": {
+      "schema": "app",
+      "description": "The central collection containing published applications"
+    },
+    "/categories/{categoryId}": {
+      "schema": "category",
+      "description": "The central list of app categories"
+    }
+  }
+}
